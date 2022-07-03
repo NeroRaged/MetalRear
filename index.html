@@ -1,0 +1,1682 @@
+<html>
+<head>
+	<!---
+	Plantilla 1.0 de webgl creada por Nero.
+
+	Implementaciones:
+	Dibujar en un ambiente 3D.
+	Optimizacion de las clases.
+	Uso de shaders.
+	Uso de deltaTime.
+	Manejo de colores en el dibujado.
+
+
+	-->
+
+	<meta charset="utf-8" />
+	<title>Metal rear</title>	
+	<link rel="stylesheet" type="text/css" href="css/main.css">
+	<script type="text/javascript" src="js/libs/jquery-2.1.4.min.js"></script>
+	<script type="text/javascript" src="js/libs/gl-matrix.js"></script>
+	<script type="text/javascript" src="js/libs/webgl-utils.js"></script>	
+	<script type="text/javascript" src="js/libs/texture_utils.js"></script>	
+	<script type="text/javascript" src="js/CuboNuevo.js"></script>	
+	<script type="text/javascript" src="js/libs/shader-utils.js"></script>
+	<script type="text/javascript" src="js/libs/deltaTime.js"></script>
+	<script type="text/javascript" src="js/libs/keyboard.js"></script>
+	<script type="text/javascript" src="js/libs/camera.js"></script>
+	<script type="text/javascript" src="js/libs/mouse.js"></script>
+
+	<!-- Primitivos -->
+	<script type="text/javascript" src="js/libs/heightMap.js"></script>
+	<script type="text/javascript" src="js/libs/skydome.js"></script>
+	<script type="text/javascript" src="js/libs/billboard.js"></script>
+	<script type="text/javascript" src="js/libs/particle.js"></script>
+	<script type="text/javascript" src="js/libs/sphere.js"></script>
+	<script type="text/javascript" src="js/libs/sound.js"></script>
+	<script type="text/javascript" src="js/libs/bullet.js"></script>
+	<script type="text/javascript" src="js/libs/mifacebook.js"></script>
+	<script type="text/javascript" src="js/Model.js"></script>
+	<script type="text/javascript" src="js/RectangleF.js"></script>
+	<script type="text/javascript" src="js/ret.js"></script>
+
+	<script type="text/javascript" src="js/Nave.js"></script>
+	<script type="text/javascript" src="js/Rear.js"></script>
+	<script type="text/javascript" src="js/Dan.js"></script>
+	
+	<script id="shader-vs" type="x-shader/x-vertex">
+
+		//Variable que se encarga de la position del vertice
+	    attribute vec4 aVertexPosition;
+	    //Nueva variable, la cual usaremos para asignar el color del triangulo
+		attribute vec4 aVertexColor;
+		attribute vec3 aVertexNormal;
+ 
+		//Variable de la matriz del modelo
+	    uniform mat4 uMVMatrix;
+	    //Variable de la matriz de proyecion.
+	    uniform mat4 uPMatrix;
+	    uniform mat4 uNMatrix;
+
+  		uniform vec3 uAmbientColor;
+  		uniform vec3 uLightingDirection;
+  		uniform vec3 uDirectionalColor;  		
+	    //Variables para textura
+		attribute vec2 aTexcoord;
+		varying vec2 vTexcoord;
+
+	    //Variable para "compartir" con el fragmentShader
+	    varying vec4 vColor;
+	    varying vec3 vLighting;
+
+	    varying vec4 vVertexPosition;
+
+	    void main(void) {
+	        gl_Position = uPMatrix * uMVMatrix * aVertexPosition;
+	        vVertexPosition = aVertexPosition;
+	        //Asignamos el color a la variable que compartimos. 	    
+	        vColor=aVertexColor;
+	        vTexcoord = aTexcoord;
+	        
+      		vec4 transformedNormal = uNMatrix * vec4(aVertexNormal,1.0);
+      		float directionalLightWeighting = max(dot(transformedNormal.xyz, normalize(uLightingDirection)), 0.0);
+      		vLighting  = uAmbientColor + (uDirectionalColor * directionalLightWeighting);          		
+	    }
+	</script>
+	<script id="shader-fs" type="x-shader/x-fragment">
+	    precision highp float;   
+
+	    varying vec4 vColor;
+	    varying vec2 vTexcoord;
+	    varying vec3 vLighting ;
+
+	    varying vec4 vVertexPosition;
+
+	    uniform sampler2D uTexture1;
+	    uniform sampler2D uTexture2;
+	    
+	    void main(void) {
+	    	//Mezcla de los 3 vertices
+	    	//Solo le mandamos el color que queremos.
+	    	//Antes tenia el valor de vec4(1.0,1.0,1.0,1.0), que representaba al blanco.
+	    	//gl_FragColor = vColor;
+	    	//gl_FragColor = texture2D(uTexture, vec2(vTexcoord.s, vTexcoord.t));
+	    	vec4 textureColor = vec4(0.0,0.0,0.0,0.0);
+	    	vec2 textureCoord = vec2(vTexcoord.s, vTexcoord.t);
+	    	if (vVertexPosition.y>=75.5){
+	    		textureColor = texture2D(uTexture1, textureCoord);
+     		}else if (vVertexPosition.y<=75.0){
+     			textureColor = texture2D(uTexture2, textureCoord);
+     		}else{
+     			vec4 textureColor1 = texture2D(uTexture1, textureCoord);	    		
+	    		vec4 textureColor2 = texture2D(uTexture2, textureCoord);
+     			
+     			float densidad = (vVertexPosition.y - 75.0) / .5;
+     			float densidad2 = 1.0-densidad; 
+				float densidad1 = densidad;
+
+				textureColor = (textureColor1 * densidad1) + (textureColor2 * densidad2);     			
+     		}
+     		gl_FragColor = vec4(textureColor.rgb * vLighting, 1.0);
+	    }
+	</script>
+	
+	<script id="shaderBump-vs" type="x-shader/x-vertex">
+
+		//Variable que se encarga de la position del vertice
+	    attribute vec4 aVertexPosition;
+	    //Nueva variable, la cual usaremos para asignar el color del triangulo
+		attribute vec4 aVertexColor;
+		attribute vec3 aVertexNormal;
+		varying vec3 vVertexNormal;
+ 
+		//Variable de la matriz del modelo
+	    uniform mat4 uMVMatrix;
+	    //Variable de la matriz de proyecion.
+	    uniform mat4 uPMatrix;
+
+	    uniform mat4 uNMatrix;
+		varying mat4 vNMatrix;
+
+	    //Light
+  		uniform vec3 uAmbientColor;
+  		uniform vec3 uLightingDirection;
+  		uniform vec3 uDirectionalColor;
+
+  		uniform bool uUseLighting;
+
+
+	    //Variables para textura
+		attribute vec2 aTexcoord;
+		varying vec2 vTexcoord;
+				
+		attribute vec3 aTangent;
+		varying vec3 vTangent;
+		
+		attribute vec3 aBiTangent;
+		varying vec3 vBiTangent;
+
+		varying vec3 vLightingDirection;
+
+
+	    //Variable para "compartir" con el fragmentShader
+	    varying vec4 vColor;
+	    varying vec3 vLighting ;
+	    varying vec4 vTransformedNormal;
+
+	    void main(void) {
+	        gl_Position = uPMatrix * uMVMatrix * aVertexPosition;
+	        //Asignamos el color a la variable que compartimos. 	    
+	        vColor=aVertexColor;
+	        vTexcoord = aTexcoord;
+	        
+	        vVertexNormal = (aVertexNormal);
+	        vTangent = (aTangent);
+	        vBiTangent = (aBiTangent);
+
+	        vNMatrix = uNMatrix;
+	        
+	        if (!uUseLighting) {
+      			vLighting  = vec3(1.0, 1.0, 1.0);
+    		} else {
+    			highp vec3 uAmbientColor = vec3(0.3, 0.3, 0.3);
+      			highp vec3 uDirectionalColor = vec3(1, 1, 1);      			
+
+      			vec4 transformedNormal = uNMatrix * vec4(aVertexNormal,1.0);
+      			float directionalLightWeighting = max(dot(transformedNormal.xyz, normalize(uLightingDirection)), 0.0);
+      			vLighting  = uAmbientColor + (uDirectionalColor * directionalLightWeighting);
+    		}
+
+    		vLightingDirection = uLightingDirection;
+	       
+	    }
+	</script>
+	<script id="shaderBump-fs" type="x-shader/x-fragment">
+	    precision highp float;   
+
+	    varying vec4 vColor;
+	    varying vec2 vTexcoord;
+	    varying vec3 vLighting;
+
+		varying vec3 vVertexNormal;
+	    varying vec3 vTangent;
+		varying vec3 vBiTangent;
+
+		varying vec3 vLightingDirection;
+
+	    uniform sampler2D uTexture;
+	    uniform sampler2D uNormalMap;
+	    
+	    varying vec4 vTransformedNormal;
+	    varying mat4 vNMatrix;
+
+	    void main(void) {
+	    	//Mezcla de los 3 vertices
+	    	//Solo le mandamos el color que queremos.
+	    	//Antes tenia el valor de vec4(1.0,1.0,1.0,1.0), que representaba al blanco.
+	    	//gl_FragColor = vColor;
+	    	//gl_FragColor = texture2D(uTexture, vec2(vTexcoord.s, vTexcoord.t));
+
+	    	vec4 textureColor = texture2D(uTexture, vec2(vTexcoord.s, vTexcoord.t));
+	    	vec4 normalColor = texture2D(uNormalMap, vec2(vTexcoord.s, vTexcoord.t));
+			normalColor = (2.0*normalColor) - 1.0;
+
+			vec3 bumpNormal = (normalColor.x * vTangent) + (- normalColor.y * vBiTangent) + (normalColor.z * vVertexNormal);
+
+			
+			//vec4 transformedNormal = vNMatrix * vec4(bumpNormal,1.0);
+      			
+			bumpNormal = normalize(bumpNormal);
+			
+			vec4 finalColor = vec4(textureColor.rgb * vColor.rgb, textureColor.a);
+			
+			float lamberFactor= max (dot (vLightingDirection, bumpNormal), 0.0) ;			
+
+			if (lamberFactor>0.0){
+				finalColor += clamp(dot(vLightingDirection, bumpNormal), 0.0, 1.0)* textureColor;
+			}
+			//gl_FragColor = vec4 (vLighting, 1.0);
+     		gl_FragColor = finalColor;
+	    }
+	</script>
+
+	<script id="shader-vModel" type="x-shader/x-vertex">
+
+		//Variable que se encarga de la position del vertice
+	    attribute vec4 aVertexPosition;
+	    //Nueva variable, la cual usaremos para asignar el color del triangulo
+		attribute vec4 aVertexColor;
+		attribute vec3 aVertexNormal;
+ 
+		//Variable de la matriz del modelo
+	    uniform mat4 uMVMatrix;
+	    //Variable de la matriz de proyecion.
+	    uniform mat4 uPMatrix;
+
+	    uniform mat4 uNMatrix;
+
+  		uniform vec3 uAmbientColor;
+
+  		uniform vec3 uLightingDirection;
+  		uniform vec3 uDirectionalColor;  	
+
+	    //Variables para textura
+		attribute vec2 aTexcoord;
+		varying vec2 vTexcoord;
+
+	    //Variable para "compartir" con el fragmentShader
+	    varying vec4 vColor;
+	    varying vec3 vLighting ;
+
+		uniform bool uIsDamage;
+		
+
+	    void main(void) {
+	        gl_Position = uPMatrix * uMVMatrix * aVertexPosition;
+	        //Asignamos el color a la variable que compartimos. 	    
+	        vColor=aVertexColor;
+	        vTexcoord = aTexcoord;
+	      
+      		vec4 transformedNormal = uNMatrix * vec4(aVertexNormal,1.0);
+      		float directionalLightWeighting = max(dot(transformedNormal.xyz, normalize(uLightingDirection)), 0.0);
+      		vLighting  = uAmbientColor + (uDirectionalColor * directionalLightWeighting);    		
+      		if (uIsDamage){
+	    		vLighting *= vec3(1.0,0.4,0.5);
+	    	}      		
+	    }
+	</script>
+	<script id="shader-fModel" type="x-shader/x-fragment">
+	    precision highp float;   
+
+	    varying vec4 vColor;
+	    varying vec2 vTexcoord;
+	    varying vec3 vLighting ;
+
+	    uniform sampler2D uTexture;
+
+	    
+	    void main(void) {
+	    	//Mezcla de los 3 vertices
+	    	//Solo le mandamos el color que queremos.
+	    	//Antes tenia el valor de vec4(1.0,1.0,1.0,1.0), que representaba al blanco.
+	    	//gl_FragColor = vColor;
+	    	//gl_FragColor = texture2D(uTexture, vec2(vTexcoord.s, vTexcoord.t));
+	    	vec4 textureColor = texture2D(uTexture, vec2(vTexcoord.s, vTexcoord.t));
+	    	
+     		gl_FragColor = vec4(textureColor.rgb * vLighting, textureColor.a);
+	    }
+	</script>
+
+	<script id="shader-vSky" type="x-shader/x-vertex">
+
+		attribute vec4 aVertexPosition;
+	    attribute vec4 aVertexColor;
+		attribute vec3 aVertexNormal;
+ 
+		uniform mat4 uMVMatrix;
+	    uniform mat4 uPMatrix;
+	    uniform mat4 uNMatrix;
+  		uniform vec3 uAmbientColor;
+  		uniform vec3 uLightingDirection;
+  		uniform vec3 uDirectionalColor;
+  		attribute vec2 aTexcoord;
+		varying vec2 vTexcoord;
+
+	    varying vec3 vLighting ;
+
+	    void main(void) {
+	        gl_Position = uPMatrix * uMVMatrix * aVertexPosition;
+	        vTexcoord = aTexcoord;	       	      
+      		vec4 transformedNormal = uNMatrix * vec4(aVertexNormal,1.0);
+      		float directionalLightWeighting = max(dot(transformedNormal.xyz, normalize(uLightingDirection)), 0.0);
+      		vLighting  = uAmbientColor + (uDirectionalColor * directionalLightWeighting);          		
+	    }
+	</script>
+	<script id="shader-fSky" type="x-shader/x-fragment">
+	    precision highp float;   
+
+	    varying vec2 vTexcoord;
+	    varying vec3 vLighting ;
+
+	    uniform sampler2D uTexture;
+	    
+	    void main(void) {
+	    	vec4 textureColor = texture2D(uTexture, vec2(vTexcoord.s, vTexcoord.t));
+     		gl_FragColor = vec4(textureColor.rgb * vLighting*vLighting, textureColor.a);
+	    }
+	</script>
+
+	<script id="shader-vBill" type="x-shader/x-vertex">
+
+		//Variable que se encarga de la position del vertice
+	    attribute vec4 aVertexPosition;
+	    attribute vec4 aVertexColor;
+		attribute vec3 aVertexNormal;
+ 
+		uniform mat4 uMVMatrix;
+	    uniform mat4 uPMatrix;
+	    uniform mat4 uNMatrix;
+  		uniform vec3 uAmbientColor;
+  		uniform vec3 uLightingDirection;
+  		uniform vec3 uDirectionalColor;
+  		
+	    attribute vec2 aTexcoord;
+		varying vec2 vTexcoord;
+
+	    varying vec3 vLighting ;
+
+	    void main(void) {
+	        gl_Position = uPMatrix * uMVMatrix * aVertexPosition;
+	        vTexcoord = aTexcoord;
+
+	     
+      		vec4 transformedNormal = uNMatrix * vec4(aVertexNormal,1.0);
+      		float directionalLightWeighting = max(dot(transformedNormal.xyz, normalize(uLightingDirection)), 0.0);
+      		vLighting  = uAmbientColor + (uDirectionalColor * directionalLightWeighting);          		
+	    }
+	</script>
+	<script id="shader-fBill" type="x-shader/x-fragment">
+	    
+	    precision highp float;   
+
+	    varying vec2 vTexcoord;
+	    varying vec3 vLighting;	   
+	    uniform sampler2D uTexture;
+	    uniform float uAlpha;
+	   
+	    
+	    void main(void) {
+	    	vec4 textureColor = texture2D(uTexture, vec2(vTexcoord.s, vTexcoord.t));
+	    	gl_FragColor = vec4(textureColor.rgb * vLighting, textureColor.a);
+
+	    	if (gl_FragColor.a<0.2) discard;
+	    	
+	    	gl_FragColor.a *=1.0;//uAlpha;
+     		
+	    }
+	</script>
+
+	<script id="shader-vPart" type="x-shader/x-vertex">
+
+		//Variable que se encarga de la position del vertice
+	    attribute vec4 aVertexPosition;
+	    attribute vec4 aVertexColor;
+		attribute vec3 aVertexNormal;
+ 
+		uniform mat4 uMVMatrix;
+	    uniform mat4 uPMatrix;
+	    uniform mat4 uNMatrix;
+  		uniform vec3 uAmbientColor;
+  		uniform vec3 uLightingDirection;
+  		uniform vec3 uDirectionalColor;
+  		
+	    attribute vec2 aTexcoord;
+		varying vec2 vTexcoord;
+
+	    varying vec3 vLighting ;
+
+	    void main(void) {
+	        gl_Position = uPMatrix * uMVMatrix * aVertexPosition;
+	        vTexcoord = aTexcoord;
+	     
+      		vec4 transformedNormal = uNMatrix * vec4(aVertexNormal,1.0);
+      		float directionalLightWeighting = max(dot(transformedNormal.xyz, normalize(uLightingDirection)), 0.0);
+      		vLighting  = uAmbientColor + (uDirectionalColor * directionalLightWeighting);          		
+	    }
+	</script>
+	<script id="shader-fPart" type="x-shader/x-fragment">
+	    
+	    precision highp float;   
+
+	    varying vec2 vTexcoord;
+	    varying vec3 vLighting;	   
+	    
+	    uniform sampler2D uTexture;
+	    uniform float uAlpha;
+	    uniform float uIndex;
+	    uniform float uFrames;
+	   
+	    
+	    void main(void) {
+	    	//float s = 1.0 - (uIndex / 3.0);
+	    	float i = float(uIndex)/uFrames;
+			float a = float(uAlpha)/uFrames;
+	    	vec4 textureColor = texture2D(uTexture, vec2((vTexcoord.s/ uFrames)+i+a, vTexcoord.t));
+	    	float alpha = (textureColor.r + textureColor.g + textureColor.b) / 1.0;
+	    	if (alpha<0.2 || textureColor.a<.2) discard;
+	    	gl_FragColor = vec4(textureColor.rgb * vLighting, 1.0);
+	    	float mid = uFrames/2.0;
+	    	float term = uIndex - mid;
+	    	float alp = 1.0 - ((term*term)/(mid*mid));
+	    	alp*=alp;
+	    	alp*=alp;
+	    	alp*=alp;
+	    	alp*=alp;
+	    	gl_FragColor.a *= alpha;//*alp;//1.0;//uAlpha;
+     		
+	    }
+	</script>
+
+
+	<script type="text/javascript">
+		
+		//Variable global de WebGL
+		var gl;
+		var canvas;
+		//Arreglo de nuestros cubos a dibujar.
+		var cubeList = [];
+
+		var cubeSun;
+
+		var sky;
+		
+		//Variable de nuestro checkbox
+		var checkBox;
+
+		var ost;
+
+		//Variable para manejar la camara.
+		var camara;
+		var nave,rear;
+		
+		var dan,danes;
+
+		var bullet,bullets,cant,switchTor;
+
+		var bulletR,bulletsR,IA,fireBall,fireBalls,firePart;
+
+		var rets=[];
+		var retPart;
+		
+		var terrenoIDE, terreno;
+
+		var dianaHandle = 0.0;
+
+		var lightingDirection;
+		var ambientColor;
+		var directionalColor;
+
+		var light = {};
+
+		var posLightDir = 0.0;
+		
+		var canvas2;
+		var gl2;
+
+		var glt;
+		var pixels;
+
+		var widthMedium, heightMedium;
+
+		var isWin=false,isWhite=false;
+
+		var control = 100.0;
+
+
+		var puntuacion,municion;	
+			
+		function openWindow (){
+			var canvas = $('#webgl-canvas-render');
+			var overlay = $('#overlay');
+			var menu = $('#menu');
+			if(canvas.css('display') == 'none' ){
+				canvas.show();
+				overlay.show();
+				menu.hide();
+			}
+			else{
+				canvas.hide();
+				overlay.hide();				
+				menu.show();
+			}
+			return menu;
+		}	
+
+		function playGame(){
+			initGame();
+			playList(localStorage.getItem("ost"));
+			openWindow();				
+		}
+
+		function configMenu (){
+			var config = $('#MenuConfig');
+			var main = $('#MenuMain');
+			if(config.css('display') == 'none' ){
+				var miJSON = localStorage.getItem("miUsario");
+				
+				$("#idRemember").prop('checked', localStorage.getItem("calidad") == 'true' );
+
+				$("#slcMusic").prop('selectedIndex',localStorage.getItem("ost"));
+                
+                var dificultad= localStorage.getItem("dif");
+            
+                if (dificultad == null)
+                    dificultad= 30;
+            
+
+				$("#idDifficultad").val(dificultad);
+					    
+				config.show();
+				main.hide();
+			}
+			else{
+				localStorage.setItem("calidad",$("#idRemember").prop('checked'));
+				localStorage.setItem("ost",$("#slcMusic").prop('selectedIndex'));
+				localStorage.setItem("dif",$("#idDifficultad").val());
+				if (ost!=undefined)
+					ost.stop();	
+				config.hide();				
+				main.show();
+			}
+		}
+
+		function pauseMenu (){
+			var pause = $('#MenuPause');
+			var main = $('#MenuMain');
+			if(openWindow().css('display')!='none'){
+				pause.show();
+				main.hide();
+			}			
+		}
+
+		function saveMenu() {
+			var save = $('#MenuSave');
+			var main = $('#MenuMain');
+			if(openWindow().css('display')!='none'){
+				save.show();
+				$("#finalScoreSpan").text(Math.floor(puntuacion));			
+				main.hide();
+			}
+		}
+
+		function recordMenu (){
+			var record = $('#MenuRecord');
+			var main = $('#MenuMain');
+			if(main.css('display')!='none'){
+				record.show();
+				main.hide();
+				//searchRanks();	
+
+				
+				$.ajax({
+    			    url: "http://proyectomilmad.com/MetalRear/wb/getRank.php",
+    			    type: "POST",
+    			    dataType: "json",
+    			   	//Access-Control-Allow-Origin: "http://proyectomilmad.com/",
+    			    success: function (response) {
+    			        record.show();
+    			        main.hide();		
+    			        searchRanks(response.data);	
+    			    },
+    			    error: function(jqXHR, textStatus, errorThrown) {
+    			       alert("Data: " + jqXHR + "\nStatus: " + textStatus + "\nError: " + errorThrown);
+    			    }    					
+    			});
+    			
+    			return false;				
+
+			}else{
+				record.hide();
+				main.show();
+			}		
+		}
+
+		function searchRanks(data){
+			var ranking =$("#ranking");
+			ranking.empty();
+			
+			for (var i = 0; i<data.length; i++){
+				ranking.append('<li><span class="tab">'+ data[i].name +'</span><span style="float: right;">' + data[i].score + '</span></li>');
+			}
+
+		}
+
+		function initGame(){
+			var canvas = $('#webgl-canvas-render');
+			var overlay = $('#overlay');
+			var menu = $('#menu');
+			var pause = $('#MenuPause');
+			var main = $('#MenuMain');
+			var config = $('#MenuConfig');
+			var record = $('#MenuRecord');
+			var save = $('#MenuSave');			
+			
+			canvas.hide();
+			save.hide();
+			overlay.hide();	
+			menu.show();
+			main.show();
+			pause.hide();
+			config.hide();			
+			record.hide();
+
+			var dificultad = localStorage.getItem("dif");
+            
+            if (dificultad == null){
+                dificultad= 30;
+            }
+            
+			bullets = [];
+			cant=0;
+			switchTor=false;
+			bulletsR = [];	
+			fireBalls = [];		
+			IA = {};
+			IA.isTake = true;
+			IA.descision = 0;
+			
+			for (var i = 0; i < 30; i++) {
+				danes[i].setPos(
+					Math.floor(Math.random() * 300) + 300,
+					Math.floor(Math.random() * 100) + 80,
+					Math.floor(Math.random() * 300) + 300);
+			}
+			
+			nave.setPos(400,100,550);
+			nave.setRot(0,180,0);
+			
+			nave.life=100;
+			rear.setHard(dificultad);
+			rear.setPos(400,100,200);
+			rear.setRot(0,0,0);
+			
+			puntuacion = 0;
+			municion = 500;
+			
+			isWin=false;
+			isWhite=false;
+
+
+			if (ost!=undefined)
+				ost.stop();	
+		}
+
+		function playTest(){
+			playList($("#slcMusic").prop('selectedIndex'));
+		}
+
+		function playList(index){
+			if (ost!=undefined)
+				ost.stop();		    
+			if (index == 0) {
+				ost = new Sound("sfx/ono.mp3", 100, 100);			    
+				ost.start();
+            }
+            else if (index == 1) {
+                ost = new Sound("sfx/twe.mp3", 100, 100);
+                ost.start();                
+            }
+            else if (index == 2) {
+                ost = new Sound("sfx/thre3.mp3", 100, 100);
+                ost.start();                
+            }                                    	
+		}
+
+		function saveData() {			
+			$.ajax({
+    		    url: "http://proyectomilmad.com/MetalRear/wb/setRank.php",
+    		    type: "POST",
+    		    dataType: "json",
+    		    data: { 
+        			'user': $("#uname").val(), 
+        			'score': puntuacion,
+    			},
+    		   	//Access-Control-Allow-Origin: "http://proyectomilmad.com/",
+    		    success: function (response) {
+    		    	var record = $('#MenuRecord');
+					var save = $('#MenuSave');			
+    		        $("#uname").val("");
+    		       	$.ajax({
+    			        url: "http://proyectomilmad.com/MetalRear/wb/getRank.php",
+    			        type: "POST",
+    			        dataType: "json",
+    			   	    success: function (response) {
+        			        save.hide();		
+    		       	        record.show();
+    		       	        searchRanks(response.data);	
+    		    	    },
+    			        error: function(jqXHR, textStatus, errorThrown) {
+    			           alert("Data: " + jqXHR + "\nStatus: " + textStatus + "\nError: " + errorThrown);
+    			        }    					
+    			    });
+    			},
+    		    error: function(jqXHR, textStatus, errorThrown) {
+    		       alert("Data: " + jqXHR + "\nStatus: " + textStatus + "\nError: " + errorThrown);
+    		    }    					
+    		});
+    			
+		}
+
+
+
+		$(document).ready(function() {
+
+			//Iniciacion de WebGL
+			try {
+				
+
+				$(window).resize(function (){
+					var winHeight = $( window ).height() * .75;
+
+					$('#webgl-canvas-render').height(winHeight);
+					$('#webgl-canvas').height(winHeight);
+					$('#menu').height(winHeight);
+
+					var winWidth = $( window ).width() * .75;
+					if (winWidth<(winHeight*4/3) + 50){
+						winHeight = winWidth*3/4;
+						$('#webgl-canvas-render').height(winHeight);
+						$('#webgl-canvas').height(winHeight);
+						$('#menu').height(winHeight);
+					}
+
+					$('#webgl-canvas-render').width(winHeight*4/3);
+					$('#webgl-canvas').width(winHeight*4/3);
+					$('#menu').width(winHeight*4/3);
+					
+        			$('#webgl-canvas-render').css({
+            			position:'absolute',
+            			left: ($(window).width() - $('#webgl-canvas-render').outerWidth())/2,
+            			top: ($(window).height() - $('#webgl-canvas-render').outerHeight())/2
+        			});
+        			$('#menu').css({
+            			position:'absolute',
+            			left: ($(window).width() - $('#webgl-canvas-render').outerWidth())/2,
+            			top: ($(window).height() - $('#webgl-canvas-render').outerHeight())/2
+        			});
+        			$('#overlay').css({
+            			position:'absolute',
+            			left: ($(window).width() - $('#webgl-canvas-render').outerWidth())/2 + 10,
+            			top: ($(window).height() - $('#webgl-canvas-render').outerHeight())/2 + 10
+        			});
+
+        			
+        			
+					if (canvas2!=undefined){
+						canvas2.height = $('#webgl-canvas-render').height();		
+						canvas2.width = $('#webgl-canvas-render').width();
+
+						gl2 = canvas2.getContext("2d");					
+					}
+
+					if (canvas!=undefined){
+						canvas.height = $('#webgl-canvas').height();		
+						canvas.width = $('#webgl-canvas').width();		
+
+						gl = canvas.getContext("experimental-webgl");
+						gl.viewportWidth = canvas.width;
+						gl.viewportHeight = canvas.height;
+						gl.clearColor(0.0, 0.0, 0.0, 1.0);
+						gl.enable(gl.DEPTH_TEST);
+						gl.viewport(0, 0, gl.viewportWidth, gl.viewportHeight);
+
+						glt = canvas.getContext('webgl');						
+					}		
+
+					if (glt != undefined){
+						pixels = new Uint8Array(glt.drawingBufferWidth * glt.drawingBufferHeight * 4);				
+						widthMedium = glt.drawingBufferWidth / 2;
+						heightMedium = glt.drawingBufferHeight / 2;
+					}
+					
+					initMouse(canvas2,document);
+								        		
+    			});    										
+
+				$(window).blur(function(e) {
+					if($('#menu').css('display') == 'none' ){
+						pauseMenu();	
+					}    				
+				});
+				
+
+				$(window).resize();
+				
+				canvas = $('#webgl-canvas')[0];
+				gl = canvas.getContext("experimental-webgl");
+				gl.viewportWidth = canvas.width;
+				gl.viewportHeight = canvas.height;
+				gl.clearColor(0.0, 0.0, 0.0, 1.0);
+				gl.enable(gl.DEPTH_TEST);
+				gl.viewport(0, 0, gl.viewportWidth, gl.viewportHeight);
+
+				canvas2 = $('#webgl-canvas-render')[0];
+				gl2 = canvas2.getContext("2d");
+
+				glt = canvas.getContext('webgl');
+				pixels = new Uint8Array(glt.drawingBufferWidth * glt.drawingBufferHeight * 4);
+				
+				widthMedium = glt.drawingBufferWidth / 2;
+				heightMedium = glt.drawingBufferHeight / 2;
+				
+				initKeyBoard(document);
+				initMouse(canvas2,document);
+			
+			} catch (e) {
+				alert("Problema al cargar WebGL en el canvas\n"+e);
+				return false;
+			}			
+			
+			
+			//Inicializamos nuestros Shaders mandando el valor de cada uno.
+			if (!initShaders($('#shader-vs')[0],$('#shader-fs')[0])){
+				return false;
+			}
+					
+			//Iniciamos nuesto checkbox
+			checkBox = $('#idRemember');
+
+			//iniciamos nuestra variable de la camara.
+			camara = new Camera(20,10,15);
+			
+			var dif = 199;
+			var texturePath = ["height/rock.jpg","height/gnd.jpg","height/gnd.jpg"];
+			var shader_vs = $('#shader-vs')[0], 
+			shader_fs = $('#shader-fs')[0];
+
+			
+			terreno = [];
+			
+			$( ".canvasArea" ).append( "<canvas id='hdnCanvas0' style='display: none;'' ></canvas>" );
+			
+			$( ".canvasArea" ).append( "<canvas id='hdnCanvas1' style='display: none;'' ></canvas>" );
+			$( ".canvasArea" ).append( "<canvas id='hdnCanvas2' style='display: none;'' ></canvas>" );
+			$( ".canvasArea" ).append( "<canvas id='hdnCanvas3' style='display: none;'' ></canvas>" );
+			$( ".canvasArea" ).append( "<canvas id='hdnCanvas4' style='display: none;'' ></canvas>" );
+			
+			$( ".canvasArea" ).append( "<canvas id='hdnCanvas5' style='display: none;'' ></canvas>" );
+			$( ".canvasArea" ).append( "<canvas id='hdnCanvas6' style='display: none;'' ></canvas>" );
+			$( ".canvasArea" ).append( "<canvas id='hdnCanvas7' style='display: none;'' ></canvas>" );
+			$( ".canvasArea" ).append( "<canvas id='hdnCanvas8' style='display: none;'' ></canvas>" );
+			
+			$( ".canvasArea" ).append( "<canvas id='hdnCanvas9' style='display: none;'' ></canvas>" );
+			$( ".canvasArea" ).append( "<canvas id='hdnCanvas10' style='display: none;'' ></canvas>" );
+			$( ".canvasArea" ).append( "<canvas id='hdnCanvas11' style='display: none;'' ></canvas>" );
+			$( ".canvasArea" ).append( "<canvas id='hdnCanvas12' style='display: none;'' ></canvas>" );
+			
+			$( ".canvasArea" ).append( "<canvas id='hdnCanvas13' style='display: none;'' ></canvas>" );			
+			$( ".canvasArea" ).append( "<canvas id='hdnCanvas14' style='display: none;'' ></canvas>" );
+			$( ".canvasArea" ).append( "<canvas id='hdnCanvas15' style='display: none;'' ></canvas>" );
+			$( ".canvasArea" ).append( "<canvas id='hdnCanvas16' style='display: none;'' ></canvas>" );
+			
+			terrenoIDE = new HeightMap($('#hdnCanvas0')[0],"height/master.png");		
+
+			
+			terreno[0] = new HeightMapModel($('#hdnCanvas1')[0],"height/hm0.png",0,0,texturePath,shader_vs,shader_fs);
+			terreno[1] = new HeightMapModel($('#hdnCanvas2')[0],"height/hm1.png",dif*1,0,texturePath,shader_vs,shader_fs);			
+			terreno[2] = new HeightMapModel($('#hdnCanvas3')[0],"height/hm2.png",dif*2,0,texturePath,shader_vs,shader_fs);
+			terreno[3] = new HeightMapModel($('#hdnCanvas4')[0],"height/hm3.png",dif*3,0,texturePath,shader_vs,shader_fs);
+			
+									
+			terreno[4] = new HeightMapModel($('#hdnCanvas5')[0],"height/hm4.png",0,dif*1,texturePath,shader_vs,shader_fs);
+			terreno[5] = new HeightMapModel($('#hdnCanvas6')[0],"height/hm5.png",dif*1,dif*1,texturePath,shader_vs,shader_fs);
+			terreno[6] = new HeightMapModel($('#hdnCanvas7')[0],"height/hm6.png",dif*2,dif*1,texturePath,shader_vs,shader_fs);
+			terreno[7] = new HeightMapModel($('#hdnCanvas8')[0],"height/hm7.png",dif*3,dif*1,texturePath,shader_vs,shader_fs);
+			
+			terreno[8] = new HeightMapModel($('#hdnCanvas9')[0],"height/hm8.png",0,dif*2,texturePath,shader_vs,shader_fs);
+			terreno[9] = new HeightMapModel($('#hdnCanvas10')[0],"height/hm9.png",dif*1,dif*2,texturePath,shader_vs,shader_fs);
+			terreno[10] = new HeightMapModel($('#hdnCanvas11')[0],"height/hm10.png",dif*2,dif*2,texturePath,shader_vs,shader_fs);
+			terreno[11] = new HeightMapModel($('#hdnCanvas12')[0],"height/hm11.png",dif*3,dif*2,texturePath,shader_vs,shader_fs);
+			
+			
+			terreno[12] = new HeightMapModel($('#hdnCanvas13')[0],"height/hm12.png",0,dif*3,texturePath,shader_vs,shader_fs);
+			terreno[13] = new HeightMapModel($('#hdnCanvas14')[0],"height/hm13.png",dif*1,dif*3,texturePath,shader_vs,shader_fs);
+			terreno[14] = new HeightMapModel($('#hdnCanvas15')[0],"height/hm14.png",dif*2,dif*3,texturePath,shader_vs,shader_fs);
+			terreno[15] = new HeightMapModel($('#hdnCanvas16')[0],"height/hm15.png",dif*3,dif*3,texturePath,shader_vs,shader_fs);		
+			//*/
+
+			sky = new SkyDome("multi/sky.jpg",$('#shader-vSky')[0], $('#shader-fSky')[0]);
+			
+			dan = new Dan();
+						
+			nave = new Nave();
+
+			rear = new Rear();			
+
+			bullet = new Bill("multi/bullet.png",$('#shader-vBill')[0], $('#shader-fBill')[0]);
+			bulletR = new Bill("multi/bulletR.png",$('#shader-vBill')[0], $('#shader-fBill')[0]);
+			
+			retPart = new Particle("multi/ret.png",8,$('#shader-vPart')[0], $('#shader-fPart')[0]);
+
+			fireBall = new Sphere("multi/fball.jpg",5,$('#shader-vModel')[0], $('#shader-fModel')[0]);
+			firePart = new Particle("multi/inlineFire.png",16,$('#shader-vPart')[0], $('#shader-fPart')[0]);
+
+
+			danes=[];
+			for (var i = 0; i < 30; i++) {
+				danes[i]=new Dan();
+			}
+			
+			lightingDirection = [1, 1, 0];
+			ambientColor = [.3, .3, 0.3];
+      		directionalColor = [0.3, .3, .7];
+
+      		light = {lightingDirection,ambientColor,directionalColor};							
+
+			initGame();			
+
+			$(window).resize();
+				
+			//Empezamos a renderear usando nuesto "tick"
+			requestAnimFrame(tick);
+		});
+
+		
+
+		//Al poner la variable time aqui, automaticamente obtiene el tiempo en milisegundos
+		function tick(time){
+
+			updateDeltaTime(time);
+			
+			if (isShowing()	){
+				updateFrame();
+				draw();			
+				processImageLife(nave.life);
+			}else{
+				//Sumamos totalTime el valor de deltaTime, cuando sea mayor a uno, significa que ya paso un segundo.
+				totalTime=0;
+				halfSecond=0;
+				torRearSecond=0;
+				rearDesc=0;
+				rearCannon=0;
+			}
+			//Volvemos a llamar la funcion de tick para volver a dibujar
+			requestAnimFrame(tick);			
+		}
+
+		function updateFrame(){
+			//Modificamos nuestra camara de acuerdo a los botones oprimidos.
+
+			if (nave.life>0){
+				if (keys['w']){
+					nave.increaseMove()
+				}
+				else if (keys['s']){
+					nave.decreaseMove()
+				}
+				if (keys['a']){
+					nave.moveLeft(deltaTime);
+				}
+				else if (keys['d']){
+					nave.moveRight(deltaTime);
+				}
+			}	
+			if (keys['q']){
+				//nave.turnLeft(deltaTime);
+			}
+			else if (keys['e']){
+				//nave.turnRight(deltaTime);
+			}
+			if (keys['c']){
+				//nave.turnUp(deltaTime);
+			}
+			else if (keys['z']){
+				//nave.turnDown(deltaTime);
+			}
+
+			if (keys['t']){
+				control++;
+			}
+			else if (keys['g']){
+				control--;
+			}
+
+			if (keys['Escape']){
+				pauseMenu();
+			}
+
+
+
+
+
+			//Obtenemos el estado del raton.
+			var mouse = getInfoMouse();
+			
+			if (mouse!=undefined && nave.life>0){
+				nave.turnAround(mouse.dx/4)
+				nave.turnLook(mouse.dy/4)
+
+
+
+				if (mouse.mouseLeft && isHalfSecondPass() && municion>0){
+					var pos =[];
+					if (switchTor){
+						mat4.getTranslation(pos,nave.mvMatrixTorRight);						
+						nave.fireResL.initPlayTranslate(nave.mvMatrixTorRight,[0,5,-20]);
+					}
+					else{
+						mat4.getTranslation(pos,nave.mvMatrixTorLeft);
+						nave.fireResR.initPlayTranslate(nave.mvMatrixTorLeft,[0,5,-20]);
+					}
+					switchTor=!switchTor;
+					var rot = [nave.rx,nave.ry,nave.rz];
+					bullets[bullets.length] = new Bullet(pos, rot[0],rot[1],rot[2],"BALA",10);
+					bullets[bullets.length-1].run(deltaTime);	
+					cant++;
+					municion--;
+				}
+			}
+
+			
+
+			if (IA.isTake && rear.life>0){
+				if (IA.descision == 0){
+					rear.increaseMove();					
+					if (isRearDescPass()){
+						IA.isTake = false;
+					}
+				}
+				
+				if ((IA.descision & 1) == 1){
+					if (nave.py>60 && isTorRearSecondPass()){
+						var pos =[];
+						var rot = rear.totalRotTor;						
+						
+						mat4.getTranslation(pos,rear.torCannon.mvMatrixLeft);
+						bulletsR[bulletsR.length] = new Bullet(pos, rot[0],rot[1],rot[2],"BALA",15);
+						mat4.getTranslation(pos,rear.torCannon.mvMatrixRight);
+						bulletsR[bulletsR.length] = new Bullet(pos, rot[0],rot[1],rot[2],"BALA",15);
+							
+					}
+					if (isRearDescPass()){
+						IA.isTake = false;
+					}
+				}
+				if ((IA.descision & 2) == 2){
+					if (rear.px==499 || rear.pz==499 || rear.pz==301 || rear.px==301
+						|| rear.rect.isCross(nave.rect)
+						){
+						IA.descision-=2;
+						IA.descision+=4;
+						rear.decreaseMove();
+					}else{
+						rear.increaseMove();						
+					}
+					if (isRearDescPass()){
+						IA.isTake = false;
+					}
+				}
+				else if ((IA.descision & 4) == 4){
+					if (rear.px==499 || rear.pz==499 || rear.pz==301 || rear.px==301
+						|| rear.rect.isCross(nave.rect)
+						){
+						IA.descision+=2;
+						IA.descision-=4;
+						rear.increaseMove();
+					}else{
+						rear.decreaseMove();						
+					}
+					if (isRearDescPass()){
+						IA.isTake = false;
+					}
+				}
+				if ((IA.descision & 8) == 8){
+					rear.turnLeft(deltaTime);
+					if (isRearDescPass()){
+						IA.isTake = false;
+					}
+				}
+				if ((IA.descision & 16) == 16){
+					rear.turnRight(deltaTime);
+					if (isRearDescPass()){
+						IA.isTake = false;
+					}
+				}
+				if ((IA.descision & 32) == 32){
+					if (isRearCannonPass()){
+						var pos =[];
+						mat4.getTranslation(pos,rear.holeMatrix);
+						var rot = rear.totalRotTor;	
+						var dis = Math.sqrt(Math.pow(nave.px-rear.px,2) + Math.pow(nave.py-rear.py,2) + Math.pow(nave.pz-rear.pz,2));	
+						fireBalls[fireBalls.length] = new Bullet(pos, rot[0],rot[1],rot[2],"BOLA",dis);
+					}
+					if (isRearDescPass()){
+						IA.isTake = false;
+					}
+				}			
+			}			
+			else if (rear.life>0){
+				IA.isTake = true;
+				if ((IA.descision & 2) == 2){
+					IA.descision = Math.floor(Math.random() * 16) | 4;	
+					if ((IA.descision & 2) == 2){
+						IA.descision -=2;
+					}
+				}
+				else if ((IA.descision & 4) == 4){
+					IA.descision = Math.floor(Math.random() * 16) | 2;	
+					if ((IA.descision & 4) == 4){
+						IA.descision -=4;
+					}
+				}
+				if ((IA.descision & 8) == 8){
+					IA.descision = Math.floor(Math.random() * 16) | 16;	
+					if ((IA.descision & 8) == 8){
+						IA.descision -=8;
+					}
+				}
+				else if ((IA.descision & 16) == 16){
+					IA.descision = Math.floor(Math.random() * 16) | 8;	
+					if ((IA.descision & 16) == 16){
+						IA.descision -=16;
+					}
+				}
+				
+				IA.descision = Math.floor(Math.random() * 48) + 1;
+
+			}		
+
+
+
+			nave.update(deltaTime);
+			rear.update(deltaTime,nave);
+
+			for (var i = 0; i < danes.length; i++) {
+				danes[i].update(deltaTime);
+			}
+
+			if (rear.life<=0){
+				bullets = [];
+			}
+			
+			for (var i = 0; i < bullets.length; i++){
+				bullets[i].run(deltaTime);								
+					
+				if (bullets[i].rect.isCross(rear.rect)){
+					puntuacion+=100;
+					rear.isDamage = true;
+					rear.life-=(100/bullets[i].vect);
+					
+					var mv = mat4.create();
+					mat4.translate(mv, mv, bullets[i].getPos());
+					rets[rets.length]= new Ret(mv,8);
+					
+					bullets.splice(i,1);				
+				}else if (bullets[i].rect.isCross(rear.rectUp)){
+					puntuacion+=100;
+					rear.isDamage = true;
+					rear.life-=(100/bullets[i].vect);
+					
+					var mv = mat4.create();
+					mat4.translate(mv, mv, bullets[i].getPos());
+					rets[rets.length]= new Ret(mv,8);
+					
+					bullets.splice(i,1);				
+				}else{
+					var floor = terrenoIDE.getHeight(Math.round(bullets[i].getPos()[0]),Math.round(bullets[i].getPos()[2]));
+					if (floor>bullets[i].getPos()[1]){
+						var mv = mat4.create();
+						mat4.translate(mv, mv, bullets[i].getPos());
+						rets[rets.length]= new Ret(mv,8);
+						bullets.splice(i,1);	
+					}
+				}
+			}
+
+
+			for (var i = 0; i < bullets.length; i++){								
+				for (var j = 0; j < danes.length; j++) {
+					try{
+						var rect = danes[j].rect;
+						if (danes[j].MODE == 1  && 
+							bullets[i].rect.isCross(rect)){
+							danes[j].ammoMode();
+							puntuacion+=(bullets[i].vect/10);
+							bullets.splice(i,1);
+							
+						}
+					}catch(e){
+						console.log(e);
+					}
+				}				
+			}
+
+			
+			for (var i = 0; i < danes.length; i++) {
+				if (danes[i].MODE == 2 && danes[i].rect.isCross(nave.rect)){
+					danes[i].respawnMode();
+					municion+=20;
+				}
+			}
+
+			if (rear.life<=0){
+				bulletsR = [];
+				fireBalls= [];
+				isWin = true;
+				if (finalDesPass()){
+					saveMenu();
+				}
+			}else{
+				finalDes=0;
+			}
+
+			for (i = 0; i < bulletsR.length; i++){
+				bulletsR[i].run(deltaTime);
+				if (bulletsR[i].rect.isCross(nave.rect)){
+					bulletsR.splice(i,1);
+					nave.fusel.isDamage = true;
+					nave.life-=2;
+				}
+			}
+
+			for (i = 0; i < fireBalls.length; i++){
+				fireBalls[i].launch(deltaTime);
+				var floor = terrenoIDE.getHeight(Math.round(fireBalls[i].getPos()[0]),Math.round(fireBalls[i].getPos()[2]));
+					
+				if (floor>fireBalls[i].getPos()[1]){
+					var mv = mat4.create();
+					mat4.translate(mv, mv, fireBalls[i].getPos());
+					rets[rets.length]= new Ret(mv,8);
+					fireBalls.splice(i,1);	
+				} else if (fireBalls[i].rect.isCross(nave.rect)){
+					//fireBalls.splice(i,1);
+					nave.fusel.isDamage = true;
+					nave.life-=15;
+				}
+			}
+
+			if (nave.life>0){
+				if (nave.life < 100){
+					nave.life+=deltaTime*5;
+				}
+			}else{
+				isWin = true;
+			}
+			
+
+			
+			camara.updatePos(nave);	
+		}
+
+		function isShowing(){
+			return $('#webgl-canvas-render').css('display') != 'none' ;
+		}
+		
+		var arr = [];
+
+		function draw() {
+			
+			// Se limpian los frames
+			gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT);
+			gl.disable(gl.BLEND);
+			gl.enable(gl.DEPTH_TEST);
+			
+					
+			for (var i = 0; i<terreno.length ; i++){			
+				terreno[i].draw(camara.pMatrix,light);
+			}
+			
+			sky.draw(camara.pMatrix,light);									
+			
+			for (var i = 0; i < danes.length; i++) {
+				danes[i].draw(camara,light);				
+			}
+
+			
+			var index = 0;
+			for (index = 0; index < bullets.length; index++){
+				bullet.drawPlane(camara,bullets[index].getMV(),light);
+			}
+			
+			if (bullets[index-1] != undefined && (bullets[index-1].vect > 800)){
+				bullets.splice(index-1,1);				
+			}
+
+			index = 0;
+			for (index = 0; index < bulletsR.length; index++){
+				bulletR.drawPlane(camara,bulletsR[index].getMV(),light);
+			}
+			
+			if (bulletsR[index-1] != undefined && (bulletsR[index-1].vect > 800)){
+				bulletsR.splice(index-1,1);				
+			}
+
+			for (index = 0; index < fireBalls.length; index++){
+				fireBall.draw(camara.pMatrix,fireBalls[index].getMatrix(),light);
+				firePart.draw(camara,fireBalls[index].getMatrix(),light,2);
+			}
+			
+			if (fireBalls[index-1] != undefined && (fireBalls[index-1].vect > 800)){
+				fireBalls.splice(index-1,1);;
+			}
+			
+
+			
+
+			for (index = 0; index < rets.length; index++){
+				retPart.drawAtFrame(rets[index].giveFrame(),camara,rets[index].mvMatrix,light);			
+			}
+			for (index = 0; index < rets.length; index++){
+				if (rets[index].isFinish()){
+					rets.splice(index-1,1);						
+				}
+			}
+			
+			
+			//if (entre(elCubo.ubicacion.x, this.ubicacion.x, this.ubicacion.x + this.tamaño, elCubo.ubicacion.x + elCubo.tamaño)) return true;
+            
+			rear.draw(camara,light);
+			nave.draw(camara,light);
+		
+
+			if (this.sphere==undefined)
+				this.sphere = new Sphere("multi/blue.jpg",3,$('#shader-vModel')[0], $('#shader-fModel')[0]);
+			else if(false){
+				this.sphere.draw(camara.pMatrix,rear.rectUp.points[0].mv,light);
+				this.sphere.draw(camara.pMatrix,rear.rectUp.points[1].mv,light);
+				this.sphere.draw(camara.pMatrix,rear.rectUp.points[2].mv,light);
+				this.sphere.draw(camara.pMatrix,rear.rectUp.points[3].mv,light);
+				this.sphere.draw(camara.pMatrix,rear.rectUp.points[4].mv,light);
+				this.sphere.draw(camara.pMatrix,rear.rectUp.points[5].mv,light);
+				this.sphere.draw(camara.pMatrix,rear.rectUp.points[6].mv,light);
+				this.sphere.draw(camara.pMatrix,rear.rectUp.points[7].mv,light);
+
+				this.sphere.draw(camara.pMatrix,nave.rect.points[0].mv,light);
+				this.sphere.draw(camara.pMatrix,nave.rect.points[1].mv,light);
+				this.sphere.draw(camara.pMatrix,nave.rect.points[2].mv,light);
+				this.sphere.draw(camara.pMatrix,nave.rect.points[3].mv,light);
+				this.sphere.draw(camara.pMatrix,nave.rect.points[4].mv,light);
+				this.sphere.draw(camara.pMatrix,nave.rect.points[5].mv,light);
+				this.sphere.draw(camara.pMatrix,nave.rect.points[6].mv,light);
+				this.sphere.draw(camara.pMatrix,nave.rect.points[7].mv,light);
+			}
+			
+						
+		   	/*
+			$("#txtRotationX").val(cubeSun.getPos().x);
+			$("#txtRotationY").val(cubeSun.getPos().y);
+			$("#txtRotationZ").val(cubeSun.getPos().z);
+			*/			
+
+			$("#scoreSpan").text(Math.floor(puntuacion));
+			$("#ammoSpan").text(Math.floor(municion));
+
+			
+			
+		}
+
+		//Esta variable nos servira para manejar el cubo que se haya seleccionado.
+		var selectedObj;
+
+
+		function addCube() {
+
+			//Creamoos un nuevo cubo y lo metemos a nuestro arreglo.			
+			cubeList.push(new cuboNuevo());
+			selectedObj=cubeList[cubeList.length -1];
+			// Codigo para generar un nuevo "option" dentro del "select" de HTML
+			var htmlText = "<option value='"+(cubeList.length - 1)+"'>"+cubeList.length+"</option>";
+			$("#slcObject").append(htmlText);
+			$("#slcObject option[value='"+(cubeList.length - 1)+"']").attr("selected", "selected");
+			$("#txtPositionX").prop('disabled', false); 
+			$("#txtPositionY").prop('disabled', false); 
+			$("#txtPositionZ").prop('disabled', false);
+			$("#txtRotationX").prop('disabled', false);
+			$("#txtRotationY").prop('disabled', false);
+			$("#txtRotationZ").prop('disabled', false);
+			$("#txtScaleX").prop('disabled', false);
+			$("#txtScaleY").prop('disabled', false);
+			$("#txtScaleZ").prop('disabled', false);				
+		}
+
+
+		function applyChanges () {
+			//Afectaremos la posicion actual de cubo.
+			selectedObj.setPos(
+				parseFloat($("#txtPositionX").val()), 
+				parseFloat($("#txtPositionY").val()), 
+				parseFloat($("#txtPositionZ").val())
+				);
+			//Afectaremos la rotacion actual de cubo.
+			selectedObj.setRot(
+				parseFloat($("#txtRotationX").val()), 
+				parseFloat($("#txtRotationY").val()), 
+				parseFloat($("#txtRotationZ").val())
+				);
+			//Afectaremos la escala actual de cubo.
+			selectedObj.setScale(
+				parseFloat($("#txtScaleX").val()), 
+				parseFloat($("#txtScaleY").val()), 
+				parseFloat($("#txtScaleZ").val())
+				);
+			selectedObj.updateColor(
+				parseFloat($("#txtR").val()),
+				parseFloat($("#txtG").val()),
+				parseFloat($("#txtB").val())
+					);	
+
+			
+		}
+
+		function processImageLife(life){
+			if (life==undefined)
+				life = 100;
+			var lifeD = 100-life;
+
+			glt.readPixels(0, 0, canvas.width, canvas.height, glt.RGBA, glt.UNSIGNED_BYTE, pixels);
+			
+			gl2.clearRect(0,0,canvas.width,canvas.height);
+				
+			var imageData = gl2.getImageData(0, 0, gl.viewportWidth, gl.viewportHeight);
+			var pixelArray = imageData.data;
+
+			if (checkBox.prop('checked')){
+				for (var h = 0; h < canvas.height; h++) {
+					for (var w = 0; w < canvas.width; w++) {
+						var index = (h*canvas.width + w)*4;
+						var indexI = ((glt.drawingBufferHeight - h - 1)*glt.drawingBufferWidth + w)*4;
+	
+						var x = widthMedium - w;
+						x = (x*x)/(widthMedium*widthMedium*10);
+						var y = heightMedium - h;
+						y = (y*y)/(heightMedium*heightMedium*10);
+						var mask = (x+y)*lifeD;
+						
+						if (isWin && !isWhite){
+							pixelArray[index++]=255;
+       						pixelArray[index++]=255;
+       						pixelArray[index++]=255;
+       						pixelArray[index++]=255;	
+						}else{
+							pixelArray[index++]=pixels[indexI++];
+       						pixelArray[index++]=pixels[indexI++]*(1-mask);
+       						pixelArray[index++]=pixels[indexI++]*(1-mask);
+       						pixelArray[index++]=pixels[indexI++];	
+						}        				
+					}					
+				}
+			}else{
+
+				for (var h = 0; h < canvas.height; h+=1) {
+					for (var w = h%2; w < canvas.width; w+=2) {
+						var index = (h*canvas.width + w)*4;
+						var indexI = ((glt.drawingBufferHeight - h - 1)*glt.drawingBufferWidth + w)*4;
+
+						var x = widthMedium - w;
+						x = (x*x)/(widthMedium*widthMedium*10);
+						var y = heightMedium - h;
+						y = (y*y)/(heightMedium*heightMedium*10);
+						var mask = (x+y)*lifeD;
+
+						if (isWin && !isWhite){
+							pixelArray[index++]=255;
+       						pixelArray[index++]=255;
+       						pixelArray[index++]=255;
+       						pixelArray[index++]=255;
+       						pixelArray[index++]=255;
+       						pixelArray[index++]=255;
+       						pixelArray[index++]=255;
+       						pixelArray[index++]=255;	
+						}else{
+							pixelArray[index++]=pixels[indexI];
+       						pixelArray[index++]=pixels[indexI+1]*(1-mask);
+       						pixelArray[index++]=pixels[indexI+2]*(1-mask);
+       						pixelArray[index++]=pixels[indexI+3];
+
+       						pixelArray[index++]=pixels[indexI];
+       						pixelArray[index++]=pixels[indexI+1]*(1-mask);
+       						pixelArray[index++]=pixels[indexI+2]*(1-mask);
+       						pixelArray[index++]=pixels[indexI+3];
+						}        				
+					}					
+				}
+			}
+
+			
+
+			gl2.putImageData(imageData, 0, 0);
+			if (isWin && !isWhite){
+				isWin=false;
+				isWhite = true;
+			}			
+		}
+
+		function clearSelection() {
+    		if(document.selection && document.selection.empty) {
+        		document.selection.empty();
+    		} else if(window.getSelection) {
+        		var sel = window.getSelection();
+        		sel.removeAllRanges();
+    		}
+    	}
+    	
+		
+	</script>
+
+</head>
+<body>
+	<div class="bc">
+		
+	</div>
+	<div class="body">
+		
+		<div class="canvasArea"></div>
+		<canvas id="webgl-canvas" style="display: none;" width="800" height="600"></canvas>	
+		<canvas id="webgl-canvas-render" width="800" height="600"></canvas>
+		<div id="overlay">
+    		<div>Puntuacion: <span id="scoreSpan"></span></div>
+	    	<div>Municion: <span id="ammoSpan"></span></div>
+  		</div>
+	
+		<div id="menu" class="controls" style="display: none;">
+			<div class="MenuGame" id="MenuMain">
+					<br></br>
+					<br></br>
+					<button type="button" onclick="playGame()">Jugar</button>
+					<br></br>
+					<br></br>
+					<button type="button" onclick="configMenu()">Configuracion</button>
+					<br></br>
+					<br></br>
+					<button type="button" onclick="recordMenu()">Records</button>															
+			</div>
+			<div class="MenuGame" id="MenuConfig">
+				<br></br>
+				
+
+				<br></br>
+				<div class="checkBoxDiv">
+					Cambiar calidad
+					<input type="checkbox" value="Bike" id="idRemember" style="float: right;"></input>
+				</div>
+				<div class="checkBoxDiv">
+					Dificultad
+					<input type="range"  min="1" max="100" id="idDifficultad" style="float: right;"></input>
+				</div>
+
+				<div class="checkBoxDiv">
+					Musica
+					<select id="slcMusic" onchange="playTest()" style="float: right;"	>
+						<option value="0">Pista 1</option>
+						<option value="1">Pista 2</option>
+						<option value="2">Pista 3</option>
+					</select>
+				</div>			
+				
+				<button type="button" onclick="configMenu()">Regresar</button>		
+			</div>
+
+			<div class="MenuGame" id="MenuPause">
+				<br></br>
+				<br></br>
+				<button type="button" onclick="pauseMenu()">Reaundar</button>
+				<br></br>
+				<br></br>
+				<br></br>				
+				<button type="button" onclick="initGame()">Salir</button>		
+			</div>
+
+			<div class="MenuGame" id="MenuRecord">
+				<br></br>
+				<div>
+					<ul id="ranking">
+						
+					</ul>
+				</div>
+				<br></br>
+				<button type="button" onclick="recordMenu()">Regresar</button>		
+				
+			</div>
+
+			<div class="MenuGame" id="MenuSave">
+				<br></br>
+				<div>
+					<label for="uname">Fin del juego, ingrese su nombre: </label>
+    				<input type="text" id="uname" name="name" maxlength="10">
+    				<label for="uname">Puntuacion: <span id="finalScoreSpan"></span></label>
+				</div>
+				<br></br>
+				<button type="button" onclick="saveData()">Guardar</button>		
+				
+			</div>
+		
+			<div style="display: none;">
+			
+				<label>Seleccionar objeto:</label>
+				<br/>
+				<select id="slcObject" onchange="selectCube();"></select>
+				<button onclick="addCube();">Nuevo</button>
+				<br/><br/>		
+				<label>Posición camara:</label>
+				<br/>
+				<div class="controlsPosition">
+					<input id="txtPositionX" type="number" step=".1" min="-10", max="10" value="0.0">
+					<input id="txtPositionY" type="number" step=".1" min="-10", max="10" value="0.0">
+					<input id="txtPositionZ" type="number" step=".1" min="-10", max="10" value="-7.0">
+				</div>
+				<br/>
+				<label>Color luz ambiental:</label>		
+				<div class="controlsPosition">
+					<input id="txtRotationX" type="number" step=".1" min="0", max="10" value="0.0">
+					<input id="txtRotationY" type="number" step=".1" min="0", max="10" value="0.0">
+					<input id="txtRotationZ" type="number" step=".1" min="0", max="10" value="0.0">
+				</div>
+				<br/>
+				<label>Color luz direccional:</label>		
+				<div class="controlsPosition">
+					<input id="txtScaleX" type="number" step=".1" min="0", max="10" value="1.0">
+					<input id="txtScaleY" type="number" step=".1" min="0", max="10" value="1.0">
+					<input id="txtScaleZ" type="number" step=".1" min="0", max="10" value="1.0">
+				</div>
+				<br/>
+				<label>Color:</label>		
+				<div class="controlsPosition">
+					<input id="txtR" type="number" step=".1" min="0", max="1" value="1.0">
+					<input id="txtG" type="number" step=".1" min="0", max="1" value="0.0">
+					<input id="txtB" type="number" step=".1" min="0", max="1" value="0.0">
+				</div>
+				<br/>
+	
+				<label>FPS:</label>				
+				<div class="controlsPosition">
+					<input id="txtFPS" type="text">			
+				</div>		
+				
+				<div class="controlsPosition">
+					<input type="checkbox" value="Bike" id="idRemember">Mover solo.<br>
+				</div>
+			</div>
+		</div>
+	
+</body>
+</html>

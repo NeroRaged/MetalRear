@@ -1,0 +1,2 @@
+[31-Oct-2017 21:19:01 America/Mexico_City] PHP Warning:  mysqli_fetch_array() expects parameter 1 to be mysqli_result, boolean given in /home/proyec71/public_html/MetalRear/Register.php on line 19
+[31-Oct-2017 21:22:42 America/Mexico_City] PHP Warning:  mysqli_fetch_array() expects parameter 1 to be mysqli_result, boolean given in /home/proyec71/public_html/MetalRear/Register.php on line 17

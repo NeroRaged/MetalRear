@@ -1,0 +1,267 @@
+<html>
+<head>
+	<!---
+	Plantilla 1.0 de webgl creada por Nero.
+
+	Implementaciones:
+	Dibujar en un ambiente 3D.
+	Optimizacion de las clases.
+	Uso de shaders.
+	Uso de deltaTime.
+	Manejo de colores en el dibujado.
+
+
+	-->
+	<meta charset="utf-8" />
+	<title>2.1 Indices y OOP</title>	
+	<link rel="stylesheet" type="text/css" href="css/main.css">
+	<script type="text/javascript" src="js/libs/jquery-2.1.4.min.js"></script>
+
+
+	<script type="text/javascript">
+		
+		//Variable global de WebGL
+		var gl;
+		var canvas;
+		//Arreglo de nuestros cubos a dibujar.
+		var cubeList = [];
+
+		var cubeSun;
+
+		var sky;
+
+		var sphere;
+
+		//Variable de nuestro checkbox
+		var checkBox;
+
+		//Variable para manejar la camara.
+		var camara;
+		var nave,modelo2;
+		
+		var bill;
+		
+		var terrenoIDE, terreno0, terreno1, terreno2, terreno3;
+
+		var dianaHandle = 0.0;
+
+		var lightingDirection;
+		var ambientColor;
+		var directionalColor;
+
+		var light = {};
+
+		var posLightDir = 0.0;
+		
+		var canvas2;
+		var gl2;
+
+		var glt;
+		var pixels;
+
+		var widthMedium, heightMedium;
+
+		var control = 0.0;		
+			
+		function openWindow (){
+			var canvas = $('#webgl-canvas-render');
+			var menu = $('#menu');
+			if(canvas.css('display') == 'none' ){
+				canvas.show();
+				menu.hide();
+			}
+			else{
+				canvas.hide();				
+				menu.show();
+			}
+			return menu;
+		}	
+
+		function configMenu (){
+			var config = $('#MenuConfig');
+			var main = $('#MenuMain');
+			if(config.css('display') == 'none' ){
+				config.show();
+				main.hide();
+			}
+			else{
+				config.hide();				
+				main.show();
+			}
+		}
+
+		function pauseMenu (){
+			var pause = $('#MenuPause');
+			var main = $('#MenuMain');
+			if(openWindow().css('display')!='none'){
+				pause.show();
+				main.hide();
+			}			
+		}
+
+		function recordMenu (){
+			var record = $('#MenuRecord');
+			var main = $('#MenuMain');
+			if(main.css('display')!='none'){
+				$.ajax({
+    			    url: "wb/getRank.php",
+    			    type: "post",
+    			   dataType: "json",
+    			    success: function (response) {
+    			        record.show();
+    			        main.hide();		
+    			        searchRanks();	
+    			    },
+    			    error: function(jqXHR, textStatus, errorThrown) {
+    			       alert("Data: " + jqXHR + "\nStatus: " + textStatus + "\nError: " + errorThrown);
+    			    }
+			
+			
+    			});
+    			return false;				
+			}else{
+				record.hide();
+				main.show();
+			}		
+		}
+
+		function searchRanks(){
+			var data={};
+			var ranking =$("#ranking");
+			ranking.empty();
+			data.length = 10;
+			for (var i = 0; i<data.length; i++){
+				ranking.append('<li><span class="tab">'+ (i+1) +'</span></li>');
+			}
+		}
+
+		function initGame(){
+			var canvas = $('#webgl-canvas-render');
+			var menu = $('#menu');
+			var pause = $('#MenuPause');
+			var main = $('#MenuMain');
+			var config = $('#MenuConfig');
+			var record = $('#MenuRecord');				
+			
+			canvas.hide();			
+			menu.show();
+			main.show();
+			pause.hide();
+			config.hide();			
+			record.hide();
+		}
+
+
+
+		$(document).ready(function() {
+
+			//Iniciacion de WebGL
+			try {
+				
+
+				$(window).resize(function (){
+        			$('#webgl-canvas-render').css({
+            			position:'absolute',
+            			left: ($(window).width() - $('#webgl-canvas-render').outerWidth())/2,
+            			top: ($(window).height() - $('#webgl-canvas-render').outerHeight())/2
+        			});
+        			$('#menu').css({
+            			position:'absolute',
+            			left: ($(window).width() - $('#webgl-canvas-render').outerWidth())/2,
+            			top: ($(window).height() - $('#webgl-canvas-render').outerHeight())/2
+        			});	        			
+    			});
+    			
+				var winHeight = $( window ).height() * .75	;
+
+				$('#webgl-canvas-render').height(winHeight);
+				$('#webgl-canvas').height(winHeight);
+				$('#webgl-canvas-render').width(winHeight*4/3);
+				$('#webgl-canvas').width(winHeight*4/3);
+				$('#menu').width(winHeight*4/3);
+				$('#menu').height(winHeight);
+
+
+				$(window).resize();
+				initGame();
+
+				
+			} catch (e) {
+				alert("Problema al cargar WebGL en el canvas\n"+e);
+				return false;
+			}			
+			
+		});		
+		
+	</script>
+
+</head>
+<body>
+	<div class="bc">
+		
+	</div>
+	<div class="body">
+		
+		<div class="canvasArea"></div>
+		<canvas id="webgl-canvas" style="display: none;" width="800" height="600"></canvas>	
+		<canvas id="webgl-canvas-render" width="800" height="600"></canvas>	
+	
+		<div id="menu" class="controls" style="display: none;">
+			<div class="MenuGame" id="MenuMain">
+					<br></br>
+					<br></br>
+					<button type="button" onclick="openWindow()">Jugar</button>
+					<br></br>
+					<br></br>
+					<button type="button" onclick="configMenu()">Configuracion</button>
+					<br></br>
+					<br></br>
+					<button type="button" onclick="recordMenu()">Records</button>															
+			</div>
+			<div class="MenuGame" id="MenuConfig">
+				<br></br>
+				<br></br>
+				<div class="checkBoxDiv">
+					Cambiar calidad
+					<input type="checkbox" value="Bike" id="idRemember" style="float: right;"></input>
+				</div>
+				<div class="checkBoxDiv">
+					Dificultad
+					<input type="range"  min="0" max="100" style="float: right;"></input>
+				</div>
+
+				<div class="checkBoxDiv">
+					Musica
+					<select id="slcMusic" onchange="" style="float: right;"	></select>
+				</div>			
+				
+				<button type="button" onclick="configMenu()">Regresar</button>		
+			</div>
+
+			<div class="MenuGame" id="MenuPause">
+				<br></br>
+				<br></br>
+				<button type="button" onclick="pauseMenu()">Reaundar</button>
+				<br></br>
+				<br></br>
+				<br></br>				
+				<button type="button" onclick="initGame()">Salir</button>		
+			</div>
+
+			<div class="MenuGame" id="MenuRecord">
+				<br></br>
+				<div>
+					<ul id="ranking">
+						
+					</ul>
+				</div>
+				<br></br>
+				<button type="button" onclick="recordMenu()">Regresar</button>		
+				
+			</div>
+		
+			
+		</div>
+	
+</body>
+</html>
