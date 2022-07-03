@@ -5,5 +5,5 @@
   "nodejs": [
     "sharpstone/default-node"
   ],
-  "scripts": { "start": "npm run open", "open": "open index.html" },
+  "scripts": { "start": "npm run open", "open": "open index.html" }
 }
