@@ -5,8 +5,5 @@
   "nodejs": [
     "sharpstone/default-node"
   ],
-  "scripts": {
-    "start": "node app/index.php",
-    "dev": "nodemon app/index.php",
-  },
+  "scripts": { "start": "npm run open", "open": "open index.html" },
 }
